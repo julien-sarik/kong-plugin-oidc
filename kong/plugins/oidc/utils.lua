@@ -87,7 +87,27 @@ function M.get_options(config, ngx)
     proxy_opts = {
       http_proxy  = config.http_proxy,
       https_proxy = config.https_proxy
-    }
+    },
+    -- list of features stored in session
+    session_contents = {
+      id_token = true,
+      -- we don't call the OP's user-info endpoint
+      user = false,
+      -- this is used to send 'id_token_hint' parameter on logout
+      enc_id_token = true,
+      access_token = true
+
+    },
+    cookie_name = config.cookie_name,
+    encryption_secret = config.encryption_secret,
+    -- session timeout configuration
+    session_opts = {
+      idling_timeout = config.session_idling_timeout,
+      rolling_timeout = config.session_rolling_timeout,
+      absolute_timeout = config.session_absolute_timeout,
+      remember_rolling_timeout = config.session_remember_rolling_timeout,
+      remember_absolute_timeout = config.session_remember_absolute_timeout,
+    },
   }
 end
 
