@@ -1,0 +1,15 @@
+# setting dynamic config through a file
+# https://doc.traefik.io/traefik/reference/dynamic-configuration/file/
+http:
+  routers:
+    router0:
+      entryPoints:
+      - web
+      service: keycloak
+      rule: PathPrefix(`/realms`)
+  services:
+    keycloak:
+      loadBalancer:
+        servers:
+        - url: http://keycloak:8080
+        passHostHeader: true

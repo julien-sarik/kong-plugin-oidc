@@ -1,0 +1,101 @@
+# Created with podman-4.6.2 generate kube
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kong-oidc
+spec:
+  containers:
+  - args:
+    - kong
+    - docker-start
+    env:
+    - name: KONG_PROXY_LISTEN
+      value: 0.0.0.0:8000
+    - name: KONG_ADMIN_LISTEN
+      value: 0.0.0.0:8001
+    - name: KONG_LOG_LEVEL
+      value: debug
+    - name: KONG_PROXY_ACCESS_LOG
+      value: /dev/stdout
+    - name: KONG_PROXY_ERROR_LOG
+      value: /dev/stderr
+    - name: KONG_NGINX_PROXY_PROXY_BUFFER_SIZE
+      value: 160k
+    - name: KONG_NGINX_PROXY_PROXY_BUFFERS
+      value: 64 160k
+    - name: KONG_DECLARATIVE_CONFIG
+      value: /kong.yml
+    - name: KONG_DATABASE
+      value: "off"
+    - name: KONG_PLUGINS
+      value: bundled,oidc
+    ###
+    # Kong allows to inject Nginx directives through env vars
+    # https://docs.konghq.com/gateway/3.7.x/reference/nginx-directives/
+    #   - the env var name must be prefixed by `KONG_`
+    #   - entries prefixed by `KONG_NGINX_HTTP_` will end up in the http block directive of the Nginx config file
+    #   - entries prefixed by `KONG_NGINX_PROXY_` will end up in the server block directive of the Nginx config file
+    # Kong uses a template file in /usr/local/kong/nginx-kong.conf and import it in the final
+    # configuration file in /usr/local/kong/nginx.conf.
+    ###
+    # lua-resty-openidc:1.7.6-3 allows to cache the OIDC discovery document and the OP public keys into an Openresty shared dictionnary (shared among all workers of the Nginx node)
+    # lua-resty-openidc will automatically cache those values if the 'discovery' and 'jwks' dictionnaries are created.
+    # For more info about lua-resty-openidc config: see https://github.com/zmartzone/lua-resty-openidc/tree/v1.7.6?tab=readme-ov-file#caching
+    # For more info on shared dictionnary: https://github.com/openresty/lua-nginx-module/blob/v0.10.26/README.markdown#lua_shared_dict
+    - name: KONG_NGINX_HTTP_LUA_SHARED_DICT
+      value: "discovery 1m; lua_shared_dict jwks 1m"
+    image: localhost/kong:kong-oidc
+    name: kong
+    ports:
+    - containerPort: 8000
+      hostPort: 8000
+    - containerPort: 8001
+      hostPort: 8001
+    securityContext: {}
+    volumeMounts:
+    - mountPath: /kong.yml
+      name: kong-config
+  - args:
+    - start-dev
+    env:
+    - name: KEYCLOAK_ADMIN
+      value: admin
+    - name: KEYCLOAK_ADMIN_PASSWORD
+      value: admin
+    - name: KC_LOG_LEVEL
+      value: INFO,org.keycloak.events:debug
+    image: quay.io/keycloak/keycloak:24.0.5
+    name: keycloak
+    ports:
+    - containerPort: 8080
+      hostPort: 8080
+  - image: docker.io/mockserver/mockserver:5.15.0
+    name: http-mock
+    ports:
+    - containerPort: 1080
+      hostPort: 1080
+  - args:
+    # setting static configuration from CLI
+    # https://doc.traefik.io/traefik/reference/static-configuration/cli/
+    - "--accesslog=true"
+    - "--entryPoints.web.address=:8888"
+    # if the dynamic config file is named `traefik.yml` then Traefik interprets it as the static config file
+    - "--providers.file.filename=/config.yml"
+    - "--providers.file.watch=true"
+    image: docker.io/traefik:v3.0.1
+    name: traefik
+    ports:
+    - containerPort: 8888
+      hostPort: 8888
+    volumeMounts:
+    - mountPath: /config.yml
+      name: traefik-config
+  volumes:
+  - hostPath:
+      path: ./kong.yml
+      type: File
+    name: kong-config
+  - hostPath:
+      path: ./traefik.yml
+      type: File
+    name: traefik-config
