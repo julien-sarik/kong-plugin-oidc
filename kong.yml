@@ -1,0 +1,75 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+- host: http-mock
+  name: front-end
+  plugins:
+  - name: oidc
+    config:
+      client_id: foo
+      client_secret: fUp4H6418Zt3Zcj1Lxyh3DxrGPs1WE4o
+      discovery: http://traefik:8888/realms/master/.well-known/openid-configuration
+      post_logout_redirect_uri: http://localhost:8000/some/path
+      redirect_after_logout_uri: http://traefik:8888/realms/master/protocol/openid-connect/logout
+      redirect_after_logout_with_id_token_hint: "yes"
+      redirect_uri: http://localhost:8000/some/path/callback
+      cookie_name: bar
+      encryption_secret: Zm9vb29v
+  port: 1080
+  protocol: http
+  routes:
+  - name: foo_route
+    paths:
+    - /some/path
+    strip_path: true
+  - name: logout
+    paths:
+    - /logout
+- host: http-mock
+  name: back-end
+  plugins:
+  - name: oidc
+    config:
+      client_id: foo
+      client_secret: fUp4H6418Zt3Zcj1Lxyh3DxrGPs1WE4o
+      discovery: http://traefik:8888/realms/master/.well-known/openid-configuration
+      cookie_name: bar
+      encryption_secret: Zm9vb29v
+      # if introspection_endpoint is set then there is no attempt to refresh the token
+      # introspection_endpoint: "http://traefik:8888/realms/master/protocol/openid-connect/token/introspect"
+      unauth_action: deny
+  port: 1080
+  protocol: http
+  routes:
+  - name: resource_server
+    paths:
+    - /resource_server
+    strip_path: true
+
+plugins:
+- name: file-log
+  config:
+    custom_fields_by_lua:
+      # hide sensitive data
+      request.headers: "return nil"
+      response.headers: "return nil"
+      # add additional data
+      ## note on 'ngx.var':
+      ## list of variables within 'ngx.var': https://nginx.org/en/docs/varindex.html
+      ## using 'ngx.var' is expensive, see https://github.com/openresty/lua-nginx-module?tab=readme-ov-file#ngxvarvariable
+      duration_ms: "return tonumber(ngx.var.request_time) * 1000"
+      user_agent: "return kong.request.get_header('User-Agent')"
+      # if the client is authenticated, the OIDC plugin sets the credentials with the ID token
+      user_id: "return kong.client.get_credential() == nil and '' or kong.client.get_credential().sub"
+      ## note on 'ngx.ctx'
+      ## 'ngx.ctx' holds data within the lifetime of the request
+      ## more details https://github.com/openresty/lua-nginx-module?tab=readme-ov-file#ngxctx
+      ## 'ngx.ctx' is cheaper than 'ngx.var' but is still more expensive than using local varialbes
+      x_request_id: "return ngx.ctx.request_id"
+    path: /dev/stdout
+- name: prometheus
+  config:
+     bandwidth_metrics: true
+     latency_metrics: true
+     status_code_metrics: true
