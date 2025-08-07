@@ -353,6 +353,14 @@ return {
               type = "string",
               required = false
             }
+          },
+          {
+            openidc_debug_log_level = {
+              type = "string",
+              required = false,
+              default = "ngx.DEBUG",
+              one_of = { "ngx.DEBUG", "ngx.INFO", "ngx.WARN", "ngx.ERR" }
+            }
           }
         }
       }
