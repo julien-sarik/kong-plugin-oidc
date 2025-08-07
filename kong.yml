@@ -16,6 +16,7 @@ services:
       redirect_uri: http://localhost:8000/some/path/callback
       cookie_name: bar
       encryption_secret: Zm9vb29v
+      openidc_debug_log_level: "ngx.INFO"
   port: 1080
   protocol: http
   routes:

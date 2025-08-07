@@ -5,6 +5,50 @@ local OidcHandler = {
 local utils = require("kong.plugins.oidc.utils")
 local filter = require("kong.plugins.oidc.filter")
 
+function OidcHandler:configure(configs)
+  -- Map openidc debug log level to configured Nginx log level
+  -- Iterate through all configs and take the highest priority (least verbose) level
+  if configs and #configs > 0 then
+    local level_mapping = {
+      ["ngx.DEBUG"] = ngx.DEBUG,
+      ["ngx.INFO"] = ngx.INFO,
+      ["ngx.WARN"] = ngx.WARN,
+      ["ngx.ERR"] = ngx.ERR
+    }
+    
+    local level_priority = {
+      [ngx.DEBUG] = 1,
+      [ngx.INFO] = 2,
+      [ngx.WARN] = 3,
+      [ngx.ERR] = 4
+    }
+    
+    local highest_level = ngx.DEBUG
+    local highest_priority = 1
+    local selected_level_name = "ngx.DEBUG"
+    
+    for _, config in ipairs(configs) do
+      if config and config.openidc_debug_log_level then
+        local mapped_level = level_mapping[config.openidc_debug_log_level]
+        if mapped_level and level_priority[mapped_level] > highest_priority then
+          highest_level = mapped_level
+          highest_priority = level_priority[mapped_level]
+          selected_level_name = config.openidc_debug_log_level
+        end
+      end
+    end
+    
+    -- Configure openidc library to use the mapped log level
+    local openidc = require("resty.openidc")
+    openidc.set_logging(nil, {
+      DEBUG = highest_level,
+      ERROR = ngx.ERR,
+      WARN = ngx.WARN
+    })
+    
+    ngx.log(ngx.INFO, "OIDC plugin configured openidc debug log level to: " .. selected_level_name)
+  end
+end
 
 function OidcHandler:access(config)
   local oidcConfig = utils.get_options(config, ngx)
